@@ -1,0 +1,136 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database service
+  postgres:
+    container_name: postgres_container
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: embarkx
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    ports:
+      - "5432:5432"
+    networks:
+      - embarkx-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # pgAdmin service for managing PostgreSQL
+  pgadmin:
+    container_name: pgadmin_container
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@embarkx.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    networks:
+      - embarkx-network
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Service Registry (Eureka Server)
+  service-registry:
+    container_name: service_registry
+    build:
+      context: ./service-reg
+      dockerfile: Dockerfile
+    ports:
+      - "8761:8761"
+    networks:
+      - embarkx-network
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Company Microservice
+  companyms:
+    container_name: company_microservice
+    build:
+      context: ./companyms
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/company
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: 1234
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://service-registry:8761/eureka/
+    networks:
+      - embarkx-network
+    restart: unless-stopped
+    depends_on:
+      service-registry:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+
+  # Review Microservice
+  reviewms:
+    container_name: review_microservice
+    build:
+      context: ./reviewms
+      dockerfile: Dockerfile
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/review
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: 1234
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://service-registry:8761/eureka/
+    networks:
+      - embarkx-network
+    restart: unless-stopped
+    depends_on:
+      service-registry:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+
+  # Job Microservice
+  jobms:
+    container_name: job_microservice
+    build:
+      context: ./jobms
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/job
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: 1234
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://service-registry:8761/eureka/
+    networks:
+      - embarkx-network
+    restart: unless-stopped
+    depends_on:
+      service-registry:
+        condition: service_started
+      companyms:
+        condition: service_started
+      reviewms:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+
+networks:
+  embarkx-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  pgadmin_data: 
