@@ -1,0 +1,61 @@
+services:
+  # PostgreSQL database service
+  postgres:
+    container_name: postgres_container
+    image: postgres # Uses the official PostgreSQL Docker image
+    environment:
+      # Environment variables for PostgreSQL configuration
+      POSTGRES_USER: embarkx # Database user
+      POSTGRES_PASSWORD: embarkx # Database password
+      PGDATA: /data/postgres # Data directory inside the container
+    volumes:
+      # Persistent volume for PostgreSQL data to ensure data is not lost on container restart
+      - postgres:/data/postgres
+    ports:
+      # Maps container port 5432 to host port 5432
+      - "5432:5432"
+    networks:
+      # Connects to the 'postgres' network
+      - postgres
+    restart: unless-stopped # Restarts the container unless it is explicitly stopped
+
+  # pgAdmin service for managing PostgreSQL
+  pgadmin:
+    container_name: pgadmin_container
+    image: dpage/pgadmin4 # Uses the official pgAdmin 4 Docker image
+    environment:
+      # Environment variables for pgAdmin configuration
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-pgadmin@example.com} # Default email for pgAdmin login
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin} # Default password for pgAdmin login
+      PGADMIN_CONFIG_SERVER_MODE: 'False' # Configures pgAdmin for desktop mode
+    volumes:
+      # Persistent volume for pgAdmin data
+      - pgadmin:/var/lib/pgadmin
+    ports:
+      # Maps container port 80 to host port 5050 (you can change 5050 if it conflicts)
+      - "5050:80"
+    networks:
+      # Connects to the 'postgres' network
+      - postgres
+    restart: unless-stopped # Restarts the container unless it is explicitly stopped
+
+  # Zipkin distributed tracing system
+  zipkin:
+    image: openzipkin/zipkin # Uses the official Zipkin Docker image
+    container_name: zipkin
+    ports:
+      # Maps container port 9411 to host port 9411
+      - "9411:9411"
+    networks:
+      # Connects to the 'postgres' network (assuming it might interact with services on this network)
+      - postgres
+
+# Define networks for inter-service communication
+networks:
+  postgres:
+    driver: bridge # Uses a bridge network for services to communicate
+
+# Define volumes for persistent data storage
+volumes:
+  postgres: # Volume for PostgreSQL data
+  pgadmin: # Volume for pgAdmin data
