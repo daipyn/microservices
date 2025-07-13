@@ -12,4 +12,4 @@ public class ServiceRegApplication {
 		SpringApplication.run(ServiceRegApplication.class, args);
 	}
 
-}
+} 
