@@ -10,6 +10,7 @@ import com.embarkx.jobms.job.model.Job;
 import com.embarkx.jobms.job.repository.JobRepository;
 import com.embarkx.jobms.job.service.JobService;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -78,6 +79,7 @@ public class JobServiceImpl implements JobService {
 
     @CircuitBreaker(name = "companyBreaker", fallbackMethod = "companyFallback")
     @Retry(name = "companyBreaker", fallbackMethod = "companyFallback")
+    @RateLimiter(name = "companyBreaker", fallbackMethod = "companyFallback")
     public Company getCompanyWithBreaker(Long companyId) {
         return companyClient.getCompany(companyId);
     }
@@ -87,6 +89,7 @@ public class JobServiceImpl implements JobService {
 
     @CircuitBreaker(name = "reviewBreaker", fallbackMethod = "reviewFallback")
     @Retry(name = "reviewBreaker", fallbackMethod = "reviewFallback")
+    @RateLimiter(name = "reviewBreaker", fallbackMethod = "reviewFallback")
     public List<Review> getReviewsWithBreaker(Long companyId) {
         return reviewClient.getReviewsByCompanyId(companyId);
     }
