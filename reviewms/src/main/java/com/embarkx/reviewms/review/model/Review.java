@@ -1,4 +1,4 @@
-package com.embarkx.reviewms.review;
+package com.embarkx.reviewms.review.model;
 
 import jakarta.persistence.*;
 import lombok.*;

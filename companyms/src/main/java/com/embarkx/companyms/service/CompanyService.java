@@ -1,6 +1,7 @@
 package com.embarkx.companyms.service;
 
 
+import com.embarkx.companyms.messaging.ReviewMessage;
 import com.embarkx.companyms.model.Company;
 
 import java.util.List;
@@ -16,4 +17,6 @@ public interface CompanyService {
     boolean deleteCompany(Long id);
 
     Optional<Company> updateCompany(Long id, Company company);
+
+    void updateCompanyRating(ReviewMessage reviewMessage);
 } 

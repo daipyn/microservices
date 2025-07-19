@@ -1,6 +1,11 @@
-package com.embarkx.reviewms.review;
+package com.embarkx.reviewms.review.controller;
 
+import ch.qos.logback.core.util.StringUtil;
+import com.embarkx.reviewms.review.messaging.ReviewMessageProducer;
+import com.embarkx.reviewms.review.model.Review;
+import com.embarkx.reviewms.review.service.ReviewService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -9,8 +14,10 @@ import java.util.List;
 @RestController
 @RequestMapping("/reviews")
 @RequiredArgsConstructor
+@Slf4j
 public class ReviewController {
     private final ReviewService reviewService;
+    private final ReviewMessageProducer reviewMessageProducer;
 
     @GetMapping
     public ResponseEntity<List<Review>> getAllReviews(@RequestParam Long companyId) {
@@ -18,9 +25,18 @@ public class ReviewController {
     }
 
     @PostMapping
-    public ResponseEntity<Review> createReview(@RequestParam Long companyId,  @RequestBody Review review) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(reviewService.createReview(companyId, review));
+    public ResponseEntity<String> createReview(@RequestParam Long companyId,  @RequestBody Review review) {
+        Review savedReview = reviewService.createReview(companyId, review);
+        if(savedReview!=null){
+            log.info("Review DTO sending to RabbitMQ: "+ savedReview);
+            reviewMessageProducer.sendMessage(savedReview);
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body("Added entity successfully");
+        }
+        else{
+            return new ResponseEntity<>("Review not created",HttpStatus.NOT_FOUND);
+        }
+
     }
 
     @GetMapping("/{reviewId}")
@@ -44,4 +60,13 @@ public class ReviewController {
         }
         return ResponseEntity.notFound().build();
     }
+
+    @GetMapping("/averageRating")
+    public Double getAverageReview(@RequestParam("companyId") Long companyId){
+        List<Review> reviews = reviewService.getallReviews(companyId);
+        Double average = reviews.stream().mapToDouble(review -> (double) review.getRating()).average().orElse(0.0);
+        log.info("Average calculated "+average);
+        return average;
+    }
+
 }
