@@ -3,8 +3,8 @@ services:
     container_name: postgres_container
     image: postgres
     environment:
-      POSTGRES_USER: embarkx
-      POSTGRES_PASSWORD: embarkx
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
       PGDATA: /data/postgres
     volumes:
       - postgres:/data/postgres
@@ -67,6 +67,80 @@ services:
       - elasticsearch
     environment:
       - "ELASTICSEARCH_HOSTS=http://elasticsearch:9200"
+    networks:
+      - postgres
+
+  servicereg:
+    build: ../service-reg
+    container_name: servicereg
+    ports:
+      - "8761:8761"
+    networks:
+      - postgres
+
+  configserver:
+    build: ../configserver
+    container_name: configserver
+    ports:
+      - "8888:8888"
+    depends_on:
+      - servicereg
+    networks:
+      - postgres
+
+  gateway:
+    build: ../gateway
+    container_name: gateway
+    ports:
+      - "8084:8084"
+    depends_on:
+      - servicereg
+      - configserver
+    networks:
+      - postgres
+
+  jobms:
+    build: ../jobms
+    container_name: jobms
+    ports:
+      - "8081:8081"
+    depends_on:
+      - postgres
+      - servicereg
+      - configserver
+      - elasticsearch
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    networks:
+      - postgres
+
+  companyms:
+    build: ../companyms
+    container_name: companyms
+    ports:
+      - "8082:8082"
+    depends_on:
+      - postgres
+      - servicereg
+      - configserver
+      - rabbitmq
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    networks:
+      - postgres
+
+  reviewms:
+    build: ../reviewms
+    container_name: reviewms
+    ports:
+      - "8083:8083"
+    depends_on:
+      - postgres
+      - servicereg
+      - configserver
+      - rabbitmq
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
     networks:
       - postgres
 
