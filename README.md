@@ -1,130 +1,146 @@
-# Microservices Architecture - EmbarkX
+# Job Board Microservices Application
 
-This project consists of 4 Spring Boot microservices with Eureka service discovery.
+A distributed job board system built with Spring Boot microservices architecture, enabling job posting, company management, and review functionalities.
 
-## Services Overview
+## Architecture Overview
 
-### 1. Service Registry (Eureka Server)
-- **Port**: 8761
-- **Application Name**: service-reg
-- **Purpose**: Service discovery and registration
+The application consists of the following microservices:
 
-### 2. Company Microservice
-- **Port**: 8082
-- **Application Name**: companyms
-- **Purpose**: Manages company information
-- **Database**: PostgreSQL (company database)
+- **Gateway Service** (Port: 8084): API Gateway handling routing and load balancing
+- **Service Registry** (Port: 8761): Eureka Server for service discovery
+- **Config Server** (Port: 8888): Centralized configuration management
+- **Job Service** (Port: 8081): Manages job postings with Elasticsearch integration
+- **Company Service** (Port: 8082): Handles company profiles and information
+- **Review Service** (Port: 8083): Manages company reviews with async processing
 
-### 3. Review Microservice
-- **Port**: 8083
-- **Application Name**: reviewms
-- **Purpose**: Manages company reviews
-- **Database**: PostgreSQL (review database)
+### Technical Stack
 
-### 4. Job Microservice
-- **Port**: 8081
-- **Application Name**: jobms
-- **Purpose**: Manages job listings with company and review integration
-- **Database**: PostgreSQL (job database)
-- **Features**: Uses Feign clients to communicate with other services
+- **Spring Boot**: Core framework for microservices
+- **Spring Cloud**: Service discovery, configuration, and API gateway
+- **PostgreSQL**: Primary database
+- **Elasticsearch**: Search engine for job postings
+- **RabbitMQ**: Message broker for asynchronous communication
+- **Zipkin**: Distributed tracing
+- **Docker**: Containerization and deployment
+- **Resilience4j**: Circuit breaking and fault tolerance
 
-## Fixed Issues
+## Prerequisites
 
-### 1. POM.xml Issues
-- ✅ Removed duplicate `spring-boot-starter-data-jpa` dependencies
-- ✅ Added proper Lombok configuration to all services
-- ✅ Consistent build plugin configuration
+- Docker and Docker Compose
+- JDK 17 or later
+- Maven
+- Git
 
-### 2. Feign Client Issues
-- ✅ Fixed service names in Feign clients to match actual application names
-- ✅ Proper injection of Feign clients in JobServiceImpl
-- ✅ Removed unused RestTemplate code
+## Getting Started
 
-### 3. Configuration Issues
-- ✅ Added proper JPA dialect configuration
-- ✅ Enhanced Eureka client configuration
-- ✅ Improved application properties structure
-- ✅ Added `eureka.instance.prefer-ip-address=true` for better service discovery
-
-### 4. Model Issues
-- ✅ Removed JPA annotations from external models used by Feign clients
-- ✅ Added proper Lombok annotations to external models
-
-## Database Setup
-
-### PostgreSQL Configuration
-All services use PostgreSQL with the following configuration:
-- **Host**: localhost
-- **Port**: 5432
-- **Username**: postgres
-- **Password**: 1234
-
-### Required Databases
-1. `company` - for companyms service
-2. `review` - for reviewms service  
-3. `job` - for jobms service
-
-## Running the Services
-
-### Prerequisites
-1. Java 17
-2. Maven
-3. PostgreSQL running on localhost:5432
-4. Create the required databases
-
-### Startup Order
-1. **Service Registry** (port 8761)
-2. **Company Microservice** (port 8082)
-3. **Review Microservice** (port 8083)
-4. **Job Microservice** (port 8081)
-
-### Commands to Run
+1. Clone the repository:
 ```bash
-# Start Service Registry
-cd service-reg
-mvn spring-boot:run
-
-# Start Company Microservice
-cd companyms
-mvn spring-boot:run
-
-# Start Review Microservice
-cd reviewms
-mvn spring-boot:run
-
-# Start Job Microservice
-cd jobms
-mvn spring-boot:run
+git clone <repository-url>
+cd <project-directory>
 ```
 
-## API Endpoints
+2. Build all services:
+```bash
+./mvnw clean package -DskipTests
+```
 
-### Company Service (8082)
-- `GET /companies` - Get all companies
-- `POST /companies` - Create a company
-- `GET /companies/{id}` - Get company by ID
-- `PUT /companies/{id}` - Update company
-- `DELETE /companies/{id}` - Delete company
+3. Start the infrastructure services:
+```bash
+cd service-reg
+docker-compose up -d
+```
 
-### Review Service (8083)
-- `GET /reviews?companyId={id}` - Get reviews by company ID
-- `POST /reviews?companyId={id}` - Create a review
-- `GET /reviews/{reviewId}?companyId={id}` - Get review by ID
-- `PUT /reviews/{reviewId}?companyId={id}` - Update review
-- `DELETE /reviews/{reviewId}?companyId={id}` - Delete review
+4. Verify the services:
+```bash
+docker-compose ps
+```
 
-### Job Service (8081)
-- `GET /jobs` - Get all jobs with company and review data
-- `POST /jobs` - Create a job
-- `GET /jobs/{id}` - Get job by ID with company and review data
-- `PUT /jobs/{id}` - Update job
-- `DELETE /jobs/{id}` - Delete job
+## Service URLs
 
-## Service Discovery
-- **Eureka Dashboard**: http://localhost:8761
-- All services will register automatically with the Eureka server
+### Main Services
+- Gateway: http://localhost:8084
+- Eureka Dashboard: http://localhost:8761
+- Config Server: http://localhost:8888
+
+### Infrastructure
+- Elasticsearch: http://localhost:9200
+- Kibana: http://localhost:5601
+- RabbitMQ Management: http://localhost:15672
+- Zipkin: http://localhost:9411
+- PgAdmin: http://localhost:5050
+
+## API Documentation
+
+### Job Service
+- `GET /jobs`: List all jobs
+- `POST /jobs`: Create a new job
+- `GET /jobs/{id}`: Get job details
+- `PUT /jobs/{id}`: Update job
+- `DELETE /jobs/{id}`: Delete job
+- `GET /jobs/search`: Search jobs with filters
+
+### Company Service
+- `GET /companies`: List all companies
+- `POST /companies`: Create a new company
+- `GET /companies/{id}`: Get company details
+- `PUT /companies/{id}`: Update company
+- `DELETE /companies/{id}`: Delete company
+
+### Review Service
+- `GET /reviews`: List all reviews
+- `POST /reviews`: Create a new review
+- `GET /reviews/{id}`: Get review details
+- `GET /reviews/company/{companyId}`: Get company reviews
+
+## Configuration
+
+### Database
+PostgreSQL is configured with the following databases:
+- `job`: Job service database
+- `company`: Company service database
+- `review`: Review service database
+
+Default credentials:
+- Username: postgres
+- Password: 1234
+
+### Elasticsearch
+- Single-node configuration
+- Security disabled for development
+- Kibana included for visualization
+
+### RabbitMQ
+- Management interface enabled
+- Default credentials:
+  - Username: guest
+  - Password: guest
+
+## Monitoring and Tracing
+
+- **Zipkin**: Distributed tracing visualization
+- **Actuator**: Service health monitoring
+- **Kibana**: Log visualization and analysis
+
+## Resilience Patterns
+
+- Circuit Breakers configured for inter-service communication
+- Retry mechanisms for transient failures
+- Rate limiting for API endpoints
 
 ## Development Notes
-- All services use Hibernate with `ddl-auto=update`
-- SQL logging is enabled for development
-- Services are configured to prefer IP addresses for better containerization support 
+
+- Services use Docker profiles for containerized environments
+- Local development can use application.properties
+- Containerized deployment uses application-docker.properties
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## License
+
+[Add your license here] 
