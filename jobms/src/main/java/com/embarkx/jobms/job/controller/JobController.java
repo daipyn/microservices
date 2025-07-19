@@ -1,6 +1,8 @@
 package com.embarkx.jobms.job.controller;
 
 import com.embarkx.jobms.job.dto.JobDTO;
+import com.embarkx.jobms.job.dto.SearchRequestDTO;
+import com.embarkx.jobms.job.dto.SearchResponseDTO;
 import com.embarkx.jobms.job.model.Job;
 import com.embarkx.jobms.job.service.JobService;
 import lombok.RequiredArgsConstructor;
@@ -48,5 +50,9 @@ public class JobController {
         return jobService.updateJob(id, job)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+    @PostMapping("/search")
+    public ResponseEntity<SearchResponseDTO> searchJobs(@RequestBody SearchRequestDTO requestDTO) {
+        return ResponseEntity.ok(jobService.search(requestDTO));
     }
 }

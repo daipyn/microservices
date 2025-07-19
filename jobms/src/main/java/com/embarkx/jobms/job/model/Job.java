@@ -5,6 +5,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.elasticsearch.annotations.Document;
+import org.springframework.data.elasticsearch.annotations.Field;
+import org.springframework.data.elasticsearch.annotations.FieldType;
 
 import java.math.BigDecimal;
 
@@ -14,6 +17,7 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "job")
+@Document(indexName = "jobs")
 public class Job {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -32,6 +36,7 @@ public class Job {
     private BigDecimal maxSalary;
 
     @Column(nullable = false)
+    @Field(type = FieldType.Keyword)
     private String location;
 
     private Long companyId;

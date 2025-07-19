@@ -2,11 +2,15 @@ package com.embarkx.jobms.job.service.impl;
 
 import com.embarkx.jobms.job.clients.CompanyClient;
 import com.embarkx.jobms.job.clients.ReviewClient;
+import com.embarkx.jobms.job.dto.FacetDTO;
 import com.embarkx.jobms.job.dto.JobDTO;
+import com.embarkx.jobms.job.dto.SearchRequestDTO;
+import com.embarkx.jobms.job.dto.SearchResponseDTO;
 import com.embarkx.jobms.job.external.Company;
 import com.embarkx.jobms.job.external.Review;
 import com.embarkx.jobms.job.mapper.JobMapper;
 import com.embarkx.jobms.job.model.Job;
+import com.embarkx.jobms.job.repository.JobESRepository;
 import com.embarkx.jobms.job.repository.JobRepository;
 import com.embarkx.jobms.job.service.JobService;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -14,20 +18,29 @@ import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.elasticsearch.client.elc.NativeQuery;
+import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
+import org.springframework.data.elasticsearch.core.SearchHits;
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
+import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
+import co.elastic.clients.elasticsearch._types.aggregations.Aggregation;
+import co.elastic.clients.elasticsearch.core.SearchResponse;
+import co.elastic.clients.elasticsearch._types.aggregations.StringTermsBucket;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
+import org.springframework.data.elasticsearch.core.AggregationsContainer;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class JobServiceImpl implements JobService {
-    
+
     private final JobRepository jobRepository;
+    private final JobESRepository jobEsRepository;
+    private final ElasticsearchOperations elasticsearchOperations;
 
     @Autowired
     private CompanyClient companyClient;
@@ -99,7 +112,9 @@ public class JobServiceImpl implements JobService {
 
     @Override
     public Job createJob(Job job) {
-        return jobRepository.save(job);
+        Job savedJobInDb = jobRepository.save(job);
+        jobEsRepository.save(job);
+        return savedJobInDb;
     }
 
     @Override
@@ -130,6 +145,7 @@ public class JobServiceImpl implements JobService {
         if (!jobRepository.existsById(id)) {
             return false;
         }
+        jobEsRepository.deleteById(id);
         jobRepository.deleteById(id);
         return true;
     }
@@ -143,7 +159,104 @@ public class JobServiceImpl implements JobService {
                     existingJob.setMinSalary(job.getMinSalary());
                     existingJob.setMaxSalary(job.getMaxSalary());
                     existingJob.setLocation(job.getLocation());
+                    jobEsRepository.save(existingJob);
                     return jobRepository.save(existingJob);
                 });
+    }
+
+    @Override
+    public SearchResponseDTO search(SearchRequestDTO request) {
+
+        // 1. Build the main search query (the "what")
+        Query multiMatchQuery = NativeQuery.builder()
+                .withQuery(q -> q
+                        .multiMatch(mm -> mm
+                                .query(request.getQuery())
+                                .fields("title", "description")
+                        )
+                )
+                .build().getQuery();
+
+        // 2. Build the filter query (the "where")
+        BoolQuery.Builder boolQueryBuilder = new BoolQuery.Builder().must(multiMatchQuery);
+
+        if (request.getLocationFilter() != null && !request.getLocationFilter().isBlank()) {
+            boolQueryBuilder.filter(f -> f
+                    .term(t -> t
+                            .field("location")
+                            .value(request.getLocationFilter())
+                    )
+            );
+        }
+
+        // 3. Define the aggregation
+        Aggregation locationAggregation = Aggregation.of(a -> a
+                .terms(ta -> ta
+                        .field("location")
+                        .size(10) // Limit to top 10 locations
+                )
+        );
+
+        // 4. Combine everything into the final native query
+        NativeQuery searchQuery = NativeQuery.builder()
+                .withQuery(q -> q.bool(boolQueryBuilder.build()))
+                .withAggregation("location", locationAggregation)
+                .build();
+
+        // 5. Execute the search
+        SearchHits<Job> searchHits = elasticsearchOperations.search(searchQuery, Job.class);
+
+        // 6. Parse the results 
+        List<Job> jobs = searchHits.getSearchHits().stream()
+                .map(hit -> hit.getContent())
+                .collect(Collectors.toList());
+
+        // 7. Parse aggregations using Spring's clean API
+        Map<String, List<FacetDTO>> facets = new HashMap<>();
+        
+        if (searchHits.hasAggregations()) {
+            AggregationsContainer<?> aggregationsContainer = searchHits.getAggregations();
+            
+            try {
+                // Use reflection to get the aggregations map safely
+                java.lang.reflect.Method aggregationsMethod = aggregationsContainer.getClass().getMethod("aggregations");
+                Object aggregationsObj = aggregationsMethod.invoke(aggregationsContainer);
+                
+                if (aggregationsObj instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> locationAggMap = (Map<String, Object>) aggregationsObj;
+                    
+                    if (locationAggMap.containsKey("location")) {
+                        Object locationAggObj = locationAggMap.get("location");
+                        
+                        // Parse using reflection to get buckets safely
+                        java.lang.reflect.Method getBucketsMethod = locationAggObj.getClass().getMethod("getBuckets");
+                        @SuppressWarnings("unchecked")
+                        List<Object> buckets = (List<Object>) getBucketsMethod.invoke(locationAggObj);
+                        
+                        List<FacetDTO> locationFacets = new ArrayList<>();
+                        for (Object bucket : buckets) {
+                            java.lang.reflect.Method getKeyMethod = bucket.getClass().getMethod("getKey");
+                            java.lang.reflect.Method getDocCountMethod = bucket.getClass().getMethod("getDocCount");
+                            
+                            String key = String.valueOf(getKeyMethod.invoke(bucket));
+                            Long docCount = (Long) getDocCountMethod.invoke(bucket);
+                            
+                            locationFacets.add(new FacetDTO(key, docCount));
+                        }
+                        facets.put("location", locationFacets);
+                    }
+                }
+            } catch (Exception e) {
+                // If reflection fails, just log and continue with empty facets
+                System.err.println("Failed to parse aggregations: " + e.getMessage());
+            }
+        }
+
+        SearchResponseDTO response = new SearchResponseDTO();
+        response.setJobs(jobs);
+        response.setFacets(facets);
+
+        return response;
     }
 }
